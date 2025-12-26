@@ -35,6 +35,15 @@
         .date { font-size: 0.75rem; color: #999; margin-bottom: 4px; }
         .user-tag { font-weight: bold; color: #007bff; }
         
+        /* 改行反映用の設定 */
+        .patch-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            display: inline-block;
+            vertical-align: top;
+            line-height: 1.5;
+        }
+
         .action-btns { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
         .btn-sm { padding: 6px 12px; font-size: 0.8rem; color: white; }
         .confirm-btn { background: #28a745; }
@@ -107,7 +116,7 @@
         clearTimeout(timerId);
         if (state) {
             retryBtn.style.display = 'none';
-            timerId = setTimeout(() => { retryBtn.style.display = 'block'; }, 8000); // 8秒で表示
+            timerId = setTimeout(() => { retryBtn.style.display = 'block'; }, 8000);
         }
         document.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = state);
     }
@@ -167,7 +176,8 @@
             <div class="patch-card ${p.status === 'pending' ? 'pending' : 'confirmed'}">
                 <div class="date">${new Date(p.date).toLocaleDateString()}</div>
                 <div id="body-${p.id}">
-                    <span class="user-tag">${p.userName}</span>: <span>${p.content}</span>
+                    <span class="user-tag">${p.userName}</span>: 
+                    <span class="patch-content">${p.content}</span>
                 </div>
                 <div class="action-btns">
                     ${p.status === 'pending' && p.userName === currentUser ? `
