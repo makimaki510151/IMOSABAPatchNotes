@@ -10,19 +10,11 @@
         nav { display: flex; background: #007bff; }
         nav button { flex: 1; padding: 15px; border: none; background: none; color: white; cursor: pointer; font-weight: bold; font-size: 1rem; }
         nav button.active { background: #004a99; border-bottom: 4px solid #fff; }
-        nav button:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        /* ローディングオーバーレイ */
+        
         #loading-overlay {
-            display: none;
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.7);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
-            color: #007bff;
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.85); z-index: 1000;
+            flex-direction: column; justify-content: center; align-items: center; text-align: center;
         }
 
         .page { display: none; padding: 20px; }
@@ -32,29 +24,36 @@
         label { display: block; margin-top: 10px; font-size: 0.85rem; color: #555; }
         input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; }
         
-        button { cursor: pointer; transition: opacity 0.2s; }
-        button:disabled { background: #ccc !important; cursor: not-allowed; }
+        button { cursor: pointer; border: none; border-radius: 4px; transition: opacity 0.2s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .primary { width: 100%; margin-top: 20px; padding: 12px; background: #007bff; color: white; font-size: 1rem; }
         
-        button.primary { width: 100%; margin-top: 20px; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; font-size: 1rem; }
-        
-        .filter-area { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .filter-area { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee; }
         .patch-card { border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 8px; background: #fff; }
         .patch-card.pending { border-left: 5px solid #ffc107; background: #fffdf5; }
         .patch-card.confirmed { border-left: 5px solid #28a745; }
-        .date { font-size: 0.75rem; color: #999; margin-bottom: 5px; }
+        .date { font-size: 0.75rem; color: #999; margin-bottom: 4px; }
         .user-tag { font-weight: bold; color: #007bff; }
-        .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; background: #ffc107; color: #000; margin-left: 8px; }
-        .action-btns { margin-top: 10px; display: flex; gap: 10px; }
-        .confirm-btn { padding: 6px 12px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 0.8rem; }
-        .delete-btn { padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; font-size: 0.8rem; }
+        
+        .action-btns { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn-sm { padding: 6px 12px; font-size: 0.8rem; color: white; }
+        .confirm-btn { background: #28a745; }
+        .delete-btn { background: #dc3545; }
+        .edit-btn { background: #6c757d; }
+        .edit-form { background: #e9ecef; padding: 12px; border-radius: 6px; margin-top: 8px; border: 1px solid #ddd; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="loading-overlay">通信中...</div>
+    <div id="loading-overlay">
+        <div style="font-weight:bold; color:#007bff; margin-bottom:15px;">通信中...</div>
+        <button id="retry-btn" onclick="location.reload()" style="display:none; padding:8px 16px; background:#6c757d; color:white;">
+            反応がありません（再読み込み）
+        </button>
+    </div>
     
-    <nav id="main-nav">
+    <nav>
         <button id="tab-post" class="active" onclick="showPage('post')">設定・投稿</button>
         <button id="tab-history" onclick="showPage('history')">パッチ履歴</button>
     </nav>
@@ -66,10 +65,9 @@
             <select id="userList"></select>
             <div style="display: flex; gap: 5px; margin-top:10px;">
                 <input type="text" id="newUserName" placeholder="新しい名前を追加">
-                <button onclick="addUser()" class="api-btn">登録</button>
+                <button onclick="addUser()" style="background:#007bff; color:white; padding:0 15px;">登録</button>
             </div>
         </section>
-
         <section>
             <h3>パッチ投稿</h3>
             <label>対象ユーザー</label>
@@ -78,13 +76,13 @@
             <input type="date" id="patchDate">
             <label>内容</label>
             <textarea id="patchContent" rows="4"></textarea>
-            <button class="primary api-btn" onclick="addPatch()">投稿する</button>
+            <button class="primary" onclick="addPatch()">投稿する</button>
         </section>
     </div>
 
     <div id="page-history" class="page">
         <div class="filter-area">
-            <label>ユーザー絞り込み：</label>
+            <label>表示するユーザーを絞り込む：</label>
             <select id="filterUser" onchange="renderPatches()">
                 <option value="all">全員分を表示</option>
             </select>
@@ -98,20 +96,24 @@
     let allPatches = [];
     let currentUser = "";
     let isLoading = false;
+    let timerId = null;
 
-    // 通信状態の切り替え
     function setLoading(state) {
         isLoading = state;
         const overlay = document.getElementById('loading-overlay');
+        const retryBtn = document.getElementById('retry-btn');
         overlay.style.display = state ? 'flex' : 'none';
         
-        // 全てのボタンとセレクトボックスを無効化
-        const inputs = document.querySelectorAll('button, input, select, textarea');
-        inputs.forEach(el => el.disabled = state);
+        clearTimeout(timerId);
+        if (state) {
+            retryBtn.style.display = 'none';
+            timerId = setTimeout(() => { retryBtn.style.display = 'block'; }, 8000); // 8秒で表示
+        }
+        document.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = state);
     }
 
     function showPage(pageId) {
-        if (isLoading) return; // ロード中は切り替え不可
+        if (isLoading) return;
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
         document.getElementById(`page-${pageId}`).classList.add('active');
@@ -127,8 +129,6 @@
             allPatches = data.patches;
             updateUserLists(data.users);
             renderPatches();
-        } catch (e) {
-            alert("データの取得に失敗しました");
         } finally {
             setLoading(false);
         }
@@ -154,54 +154,73 @@
         const display = document.getElementById('patchDisplay');
         const filter = document.getElementById('filterUser').value;
         
-        const visiblePatches = allPatches.filter(p => {
-            return p.status === 'confirmed' || (p.status === 'pending' && p.userName === currentUser);
-        });
-
-        const sorted = visiblePatches.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const visible = allPatches.filter(p => p.status === 'confirmed' || (p.status === 'pending' && p.userName === currentUser));
+        const sorted = visible.sort((a, b) => new Date(b.date) - new Date(a.date));
         const filtered = filter === 'all' ? sorted : sorted.filter(p => p.userName === filter);
 
         if (filtered.length === 0) {
-            display.innerHTML = '<p style="text-align:center; color:#999;">表示できるパッチはありません</p>';
+            display.innerHTML = '<p style="text-align:center; color:#999;">データがありません</p>';
             return;
         }
 
         display.innerHTML = filtered.map(p => `
             <div class="patch-card ${p.status === 'pending' ? 'pending' : 'confirmed'}">
                 <div class="date">${new Date(p.date).toLocaleDateString()}</div>
-                <div><span class="user-tag">${p.userName}</span>: ${p.content}
-                    ${p.status === 'pending' ? '<span class="status-badge">未確定（あなた宛）</span>' : ''}
+                <div id="body-${p.id}">
+                    <span class="user-tag">${p.userName}</span>: <span>${p.content}</span>
                 </div>
-                ${p.status === 'pending' && p.userName === currentUser ? `
-                    <div class="action-btns">
-                        <button class="confirm-btn" onclick="handlePatch('${p.id}', 'confirmPatch')">確定する</button>
-                        <button class="delete-btn" onclick="handlePatch('${p.id}', 'deletePatch')">削除する</button>
-                    </div>
-                ` : ''}
+                <div class="action-btns">
+                    ${p.status === 'pending' && p.userName === currentUser ? `
+                        <button class="btn-sm confirm-btn" onclick="apiCall('confirmPatch', {patchId:'${p.id}'})">確定</button>
+                        <button class="btn-sm delete-btn" onclick="apiCall('deletePatch', {patchId:'${p.id}'})">削除</button>
+                    ` : ''}
+                    ${p.status === 'confirmed' && p.userName === currentUser ? `
+                        <button class="btn-sm edit-btn" onclick="showEditForm('${p.id}', '${p.date}', \`${p.content}\`)">編集</button>
+                    ` : ''}
+                </div>
             </div>
         `).join('');
     }
 
-    async function handlePatch(patchId, action) {
-        const msg = action === 'deletePatch' ? "このパッチを削除しますか？" : "このパッチを確定しますか？";
-        if (!confirm(msg)) return;
-        
+    function showEditForm(id, oldDate, oldContent) {
+        const view = document.getElementById(`body-${id}`);
+        const isoDate = new Date(oldDate).toISOString().split('T')[0];
+        view.innerHTML = `
+            <div class="edit-form">
+                <input type="date" id="input-date-${id}" value="${isoDate}">
+                <textarea id="input-content-${id}" rows="3" style="margin-top:5px;">${oldContent}</textarea>
+                <div class="action-btns">
+                    <button class="btn-sm confirm-btn" onclick="saveEdit('${id}')">保存</button>
+                    <button class="btn-sm edit-btn" onclick="renderPatches()">中止</button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function saveEdit(id) {
+        const date = document.getElementById(`input-date-${id}`).value;
+        const content = document.getElementById(`input-content-${id}`).value;
+        await apiCall('editPatch', { patchId: id, date, content });
+    }
+
+    async function apiCall(action, params) {
+        if (action === 'deletePatch' && !confirm("本当に削除しますか？")) return;
         setLoading(true);
-        await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action, patchId })
-        });
-        await fetchData();
+        try {
+            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, ...params }) });
+            await fetchData();
+        } catch(e) {
+            alert("通信エラーが発生しました");
+            setLoading(false);
+        }
     }
 
     async function addUser() {
         const userName = document.getElementById('newUserName').value;
         if (!userName) return;
-        setLoading(true);
-        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'addUser', userName }) });
+        await apiCall('addUser', { userName });
         currentUser = userName;
         document.getElementById('newUserName').value = "";
-        await fetchData();
     }
 
     async function addPatch() {
@@ -209,14 +228,8 @@
         const date = document.getElementById('patchDate').value;
         const content = document.getElementById('patchContent').value;
         currentUser = document.getElementById('userList').value;
-
-        if (!date || !content) return alert("入力が不足しています");
-
-        setLoading(true);
-        await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'addPatch', targetUser, date, content, currentUser })
-        });
+        if (!date || !content) return alert("入力不足です");
+        await apiCall('addPatch', { targetUser, date, content, currentUser });
         document.getElementById('patchContent').value = "";
         showPage('history');
     }
@@ -228,6 +241,5 @@
         renderPatches();
     };
 </script>
-
 </body>
 </html>
